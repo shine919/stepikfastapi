@@ -1,21 +1,16 @@
-from config import load_config
-from fastapi import FastAPI
+from config import config, fake_db
+from fastapi import FastAPI, HTTPException, Request, Response
 from logger import logger
-from pydantic import BaseModel
-
+from models.models import UserLogin
+from utils import create_token, verify_token
 
 app = FastAPI()
-config = load_config()
+
 
 if config.debug:
     app.debug = True
 else:
     app.debug = False
-
-
-class Nums(BaseModel):
-    num1: int = 1
-    num2: int = 1
 
 
 @app.get("/")
@@ -24,6 +19,26 @@ async def root():
     return {"database_url": config.db.database_url}
 
 
-@app.post("/calculate/")
-async def calculate(nums: Nums):
-    return nums.num1 + nums.num2
+@app.post("/login")
+async def login_user(user: UserLogin, response: Response):
+    for client in fake_db:
+        if client["username"] == user.username and client["password"] == user.password:
+            token = await create_token(client["user_id"])
+            response.set_cookie(key="session_token", value=token, max_age=300, httponly=True)
+            client["session_token"] = token
+            return "congrats"
+    return "User not found"
+
+
+@app.get("/user")
+async def get_user(request: Request, response: Response):
+    session_token = request.cookies.get("session_token")
+    if session_token:
+        res = await verify_token(session_token, response)
+        if res["message"] == "success":
+            for client in fake_db:
+                if client["session_token"] == session_token:
+                    return client
+            return "User with this cookie not Found"
+        return HTTPException(status_code=401, detail=res["message"])
+    return "You are not logged in"

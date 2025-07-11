@@ -47,7 +47,7 @@ async def verify_token(token, response: Response, max_age=1800):
             raise BadSignature("msg")
         if not await check_token_time(user_id, time, response):
             raise SignatureExpired("msg")
-        return True
+        return {"message": "Success"}
     except BadSignature:
         return {"message": "Invalid session"}
     except SignatureExpired:
